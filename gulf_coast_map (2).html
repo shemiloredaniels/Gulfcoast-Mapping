@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Gulf Coast Infrastructure Map</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+  <style>
+    body { margin: 0; font-family: Arial, sans-serif; }
+    #map { height: 100vh; }
+    
+    .controls {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      z-index: 1000;
+      min-width: 200px;
+    }
+    
+    .controls h3 {
+      margin: 0 0 10px 0;
+      font-size: 16px;
+      color: #333;
+    }
+    
+    .control-group {
+      margin-bottom: 12px;
+    }
+    
+    .control-group label {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      padding: 4px 0;
+      font-size: 14px;
+    }
+    
+    .control-group input[type="checkbox"] {
+      margin-right: 8px;
+      transform: scale(1.2);
+    }
+    
+    .legend {
+      position: absolute;
+      bottom: 20px;
+      left: 10px;
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      z-index: 1000;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    
+    .legend h4 {
+      margin: 0 0 8px 0;
+      font-size: 14px;
+    }
+    
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+    
+    .legend-symbol {
+      width: 20px;
+      height: 20px;
+      margin-right: 8px;
+      border-radius: 3px;
+    }
+    
+    .city-info {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: white;
+      padding: 10px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      z-index: 1000;
+      font-size: 14px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+<div id="map"></div>
+
+<div class="controls">
+  <h3>Infrastructure Layers</h3>
+  <div class="control-group">
+    <label>
+      <input type="checkbox" id="shipyards" checked>
+      Shipyards
+    </label>
+  </div>
+  <div class="control-group">
+    <label>
+      <input type="checkbox" id="railways" checked>
+      Railways
+    </label>
+  </div>
+  <div class="control-group">
+    <label>
+      <input type="checkbox" id="manufacturers" checked>
+      Manufacturers
+    </label>
+  </div>
+  <div class="control-group">
+    <label>
+      <input type="checkbox" id="ports" checked>
+      Ports
+    </label>
+  </div>
+</div>
+
+<div class="legend">
+  <h4>Legend</h4>
+  <div class="legend-item">
+    <div class="legend-symbol" style="background: #2E86AB; border-radius: 50%;"></div>
+    <span>Shipyards</span>
+  </div>
+  <div class="legend-item">
+    <div class="legend-symbol" style="background: #A23B72; height: 4px; border-radius: 2px;"></div>
+    <span>Railways</span>
+  </div>
+  <div class="legend-item">
+    <div class="legend-symbol" style="background: #F18F01;"></div>
+    <span>Manufacturers</span>
+  </div>
+  <div class="legend-item">
+    <div class="legend-symbol" style="background: #C73E1D; border-radius: 50%;"></div>
+    <span>Ports</span>
+  </div>
+</div>
+
+<div class="city-info" id="cityInfo">
+  <strong id="cityName"></strong>
+  <div id="cityDetails"></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+<script>
+  const map = L.map('map').setView([29.5, -90], 6);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 18,
+    attribution: '© OpenStreetMap contributors'
+  }).addTo(map);
+
+  // Layer groups for different infrastructure types (not added to map initially)
+  const layerGroups = {
+    shipyards: L.layerGroup(),
+    railways: L.layerGroup(),
+    manufacturers: L.layerGroup(),
+    ports: L.layerGroup()
+  };
+
+  // Comprehensive infrastructure data with 20+ points per city
+  const infrastructureData = {
+    // Mobile, AL infrastructure (25 points)
+    mobile: {
+      shipyards: [
+        { name: "BAE Systems Southeast Shipyards Alabama", coords: [30.6754, -88.0799], capacity: "Major naval repair facility", employees: 1200 },
+        { name: "Austal USA", coords: [30.6654, -88.0899], capacity: "High-speed vessels & Navy ships", employees: 4000 },
+        { name: "Mobile Ship Repair", coords: [30.6854, -88.0699], capacity: "Commercial vessel repair", employees: 180 },
+        { name: "Alabama Shipyard", coords: [30.6554, -88.0999], capacity: "Tugboat & barge construction", employees: 350 },
+        { name: "Coastal Marine Services", coords: [30.6954, -88.0599], capacity: "Offshore support vessels", employees: 125 },
+        { name: "Gulf Marine Fabricators", coords: [30.6454, -88.1099], capacity: "Marine equipment manufacturing", employees: 200 }
+      ],
+      railways: [
+        { name: "CSX Mobile Terminal", coords: [30.6854, -88.0399], type: "Intermodal terminal" },
+        { name: "Norfolk Southern Mobile Yard", coords: [30.6954, -88.0499], type: "Classification yard" },
+        { name: "BNSF Mobile Junction", coords: [30.6754, -88.0599], type: "Rail junction" },
+        { name: "Port City Terminal Railway", coords: [30.7054, -88.0299], type: "Port connector" },
+        { name: "Mobile & Birmingham Railroad", coords: [30.6654, -88.0699], type: "Regional line" }
+      ],
+      manufacturers: [
+        { name: "Airbus Mobile Assembly Plant", coords: [30.6294, -88.1169], type: "Aircraft Manufacturing", products: "A220, A320 family" },
+        { name: "Continental Motors", coords: [30.6954, -88.0199], type: "Aerospace", products: "Aircraft engines" },
+        { name: "ThyssenKrupp Steel USA", coords: [30.7154, -88.0399], type: "Steel Processing", products: "Hot-rolled steel" },
+        { name: "International Paper", coords: [30.6354, -88.1269], type: "Paper Manufacturing", products: "Containerboard" },
+        { name: "Evonik Corporation", coords: [30.6754, -88.0099], type: "Chemicals", products: "Specialty chemicals" },
+        { name: "Scott Paper Company", coords: [30.6854, -88.0199], type: "Paper Products", products: "Tissue paper" },
+        { name: "Alabama Power Plant Barry", coords: [30.6154, -88.1369], type: "Power Generation", products: "Electricity" }
+      ],
+      ports: [
+        { name: "Port of Mobile - Main Terminal", coords: [30.7054, -88.0499], type: "Deep-water port", cargo: "Containers, coal, steel" },
+        { name: "McDuffie Coal Terminal", coords: [30.7154, -88.0399], type: "Coal terminal", cargo: "Export coal" },
+        { name: "Pinto Island Terminal", coords: [30.6854, -88.0799], type: "Bulk terminal", cargo: "Iron ore, steel products" },
+        { name: "Mobile Container Terminal", coords: [30.7254, -88.0299], type: "Container port", cargo: "Import/export containers" },
+        { name: "Choctaw Point Terminal", coords: [30.6754, -88.0899], type: "Chemical terminal", cargo: "Chemicals, petroleum" },
+        { name: "Theodore Industrial Complex", coords: [30.5454, -88.1799], type: "Industrial port", cargo: "Forest products" }
+      ]
+    },
+    
+    // Tampa Bay, FL infrastructure (26 points)
+    tampa: {
+      shipyards: [
+        { name: "Tampa Ship Repair & Drydock", coords: [27.9406, -82.4672], capacity: "Commercial vessel repair", employees: 300 },
+        { name: "Oceaneering International", coords: [27.9506, -82.4472], capacity: "Offshore vessel services", employees: 450 },
+        { name: "Bollinger Shipyards Tampa", coords: [27.9306, -82.4872], capacity: "Military & commercial vessels", employees: 280 },
+        { name: "Tampa Bay Ship Building", coords: [27.9606, -82.4372], capacity: "Yacht construction & repair", employees: 150 },
+        { name: "Marine Group Boat Works", coords: [27.9206, -82.4972], capacity: "Luxury yacht repair", employees: 85 },
+        { name: "Westshore Marine Terminal", coords: [27.9706, -82.4272], capacity: "Marine construction", employees: 120 }
+      ],
+      railways: [
+        { name: "CSX Tampa Terminal", coords: [27.9506, -82.4772], type: "Intermodal yard" },
+        { name: "Tampa Port Railroad", coords: [27.9606, -82.4372], type: "Port connector" },
+        { name: "Norfolk Southern Uceta Yard", coords: [27.9406, -82.4572], type: "Classification yard" },
+        { name: "Tampa Union Station", coords: [27.9456, -82.4582], type: "Passenger terminal" },
+        { name: "Hookers Point Rail Terminal", coords: [27.9306, -82.4972], type: "Bulk terminal" }
+      ],
+      manufacturers: [
+        { name: "General Dynamics Land Systems", coords: [27.9506, -82.4772], type: "Defense Manufacturing", products: "Military vehicles" },
+        { name: "Honeywell Aerospace", coords: [27.9706, -82.4372], type: "Aerospace", products: "Avionics systems" },
+        { name: "TECO Energy", coords: [27.9256, -82.4822], type: "Power Generation", products: "Electricity" },
+        { name: "Mosaic Fertilizer", coords: [27.8906, -82.5172], type: "Chemical Manufacturing", products: "Phosphate fertilizer" },
+        { name: "Coca-Cola Bottling", coords: [27.9606, -82.4172], type: "Beverage Manufacturing", products: "Soft drinks" },
+        { name: "Anheuser-Busch Tampa", coords: [27.9806, -82.4072], type: "Brewery", products: "Beer & beverages" },
+        { name: "Tampa Electric Big Bend", coords: [27.8806, -82.5272], type: "Power Plant", products: "Coal & gas power" },
+        { name: "Kimberly-Clark", coords: [27.9406, -82.4172], type: "Paper Products", products: "Consumer tissue" }
+      ],
+      ports: [
+        { name: "Port Tampa Bay - Main Terminal", coords: [27.9306, -82.4772], type: "Cargo port", cargo: "Petroleum, phosphate, containers" },
+        { name: "Hookers Point Terminal", coords: [27.9206, -82.4972], type: "Bulk terminal", cargo: "Phosphate rock" },
+        { name: "East Bay Terminal", coords: [27.9406, -82.4572], type: "Liquid bulk", cargo: "Petroleum products" },
+        { name: "Berth 213-217 Container", coords: [27.9356, -82.4672], type: "Container terminal", cargo: "Import/export containers" },
+        { name: "TECO Terminal", coords: [27.9256, -82.4872], type: "Coal terminal", cargo: "Coal imports" },
+        { name: "Port Redwing", coords: [27.8906, -82.5172], type: "Phosphate port", cargo: "Fertilizer exports" }
+      ]
+    },
+    
+    // Galveston, TX infrastructure (24 points)
+    galveston: {
+      shipyards: [
+        { name: "Gulf Copper Ship Repair", coords: [29.2913, -94.8077], capacity: "Commercial ship repair", employees: 250 },
+        { name: "Bollinger Shipyards Galveston", coords: [29.3113, -94.7877], capacity: "Offshore support vessels", employees: 400 },
+        { name: "Galveston Marine Services", coords: [29.2813, -94.8177], capacity: "Tugboat & barge repair", employees: 125 },
+        { name: "Texas Marine Repair", coords: [29.3213, -94.7777], capacity: "Commercial vessel services", employees: 180 },
+        { name: "Gulf Coast Shipyard", coords: [29.2713, -94.8277], capacity: "Offshore platform construction", employees: 320 },
+        { name: "Island Marine Construction", coords: [29.3313, -94.7677], capacity: "Marine fabrication", employees: 95 }
+      ],
+      railways: [
+        { name: "BNSF Galveston Terminal", coords: [29.3013, -94.8177], type: "Port rail terminal" },
+        { name: "Union Pacific Galveston Branch", coords: [29.3213, -94.7777], type: "Branch line" },
+        { name: "Galveston Railroad Museum", coords: [29.3013, -94.7977], type: "Heritage railroad" },
+        { name: "Port of Galveston Rail", coords: [29.2913, -94.8077], type: "Port connector" },
+        { name: "Galveston Wharves Railroad", coords: [29.3113, -94.7877], type: "Terminal railroad" }
+      ],
+      manufacturers: [
+        { name: "LyondellBasell Channelview", coords: [29.3213, -94.7677], type: "Petrochemical", products: "Polymers, chemicals" },
+        { name: "Valero Texas City Refinery", coords: [29.3513, -94.8277], type: "Oil Refining", products: "Gasoline, diesel" },
+        { name: "Marathon Petroleum Texas City", coords: [29.3413, -94.8377], type: "Oil Refining", products: "Refined petroleum" },
+        { name: "BP Texas City Refinery", coords: [29.3313, -94.8477], type: "Oil Refining", products: "Gasoline, chemicals" },
+        { name: "Dow Chemical Texas Operations", coords: [29.3613, -94.8177], type: "Chemical Manufacturing", products: "Plastics, chemicals" },
+        { name: "BASF Freeport", coords: [29.1313, -95.3677], type: "Chemical Complex", products: "Chemical intermediates" },
+        { name: "Huntsman Petrochemical", coords: [29.3113, -94.8577], type: "Petrochemicals", products: "Polyols, MDI" }
+      ],
+      ports: [
+        { name: "Port of Galveston - Main Terminal", coords: [29.3013, -94.7877], type: "Cruise & cargo port", cargo: "Containers, automobiles, cruise passengers" },
+        { name: "Galveston Wharves Terminal 1", coords: [29.3113, -94.7777], type: "Cruise terminal", cargo: "Cruise passengers" },
+        { name: "Auto Import Terminal", coords: [29.2913, -94.8177], type: "RoRo terminal", cargo: "Imported vehicles" },
+        { name: "Bulk Material Terminal", coords: [29.3213, -94.7677], type: "Bulk terminal", cargo: "Steel, project cargo" },
+        { name: "Galveston Railroad Terminal", coords: [29.3013, -94.8077], type: "Rail-marine terminal", cargo: "Containers, breakbulk" },
+        { name: "Texas City Terminal", coords: [29.3813, -94.8777], type: "Chemical port", cargo: "Petrochemicals, refined products" }
+      ]
+    }
+  };
+
+  const cities = [
+    { name: "Mobile, AL", coords: [30.6954, -88.0399], zoom: 12, key: "mobile" },
+    { name: "Morgan City, LA", coords: [29.6994, -91.2068], zoom: 13, key: null },
+    { name: "Pascagoula, MS", coords: [30.3657, -88.5561], zoom: 13, key: null },
+    { name: "Pensacola, FL", coords: [30.4213, -87.2169], zoom: 13, key: null },
+    { name: "Panama City, FL", coords: [30.1588, -85.6602], zoom: 13, key: null },
+    { name: "Clearwater, FL", coords: [27.9659, -82.8001], zoom: 13, key: null },
+    { name: "St. Petersburg, FL", coords: [27.7676, -82.6403], zoom: 13, key: null },
+    { name: "Brownsville, TX", coords: [25.9017, -97.4975], zoom: 13, key: null },
+    { name: "Galveston, TX", coords: [29.3013, -94.7977], zoom: 13, key: "galveston" },
+    { name: "Lake Charles, TX", coords: [30.2266, -93.2174], zoom: 13, key: null },
+    { name: "Tampa Bay, FL", coords: [27.9506, -82.4572], zoom: 12, key: "tampa" },
+    { name: "Port Manatee, FL", coords: [27.6385, -82.5632], zoom: 13, key: null },
+    { name: "Beaumont, TX", coords: [30.0802, -94.1266], zoom: 13, key: null }
+  ];
+
+  // Add city markers
+  cities.forEach(city => {
+    const marker = L.marker(city.coords).addTo(map)
+      .bindPopup(`<b>${city.name}</b><br>${city.key ? 'Click to view infrastructure' : 'Infrastructure data coming soon'}`);
+
+    marker.on('click', function () {
+      if (city.key) {
+        map.setView(city.coords, city.zoom);
+        loadCityInfrastructure(city.key, city.name);
+      }
+    });
+  });
+
+  // Custom icons with symbols
+  const shipyardIcon = L.divIcon({
+    className: 'custom-div-icon',
+    html: '<div style="background: #2E86AB; width: 24px; height: 24px; border-radius: 4px; border: 2px solid white; display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: bold;">🚢</div>',
+    iconSize: [24, 24],
+    iconAnchor: [12, 12]
+  });
+
+  const manufacturerIcon = L.divIcon({
+    className: 'custom-div-icon',
+    html: '<div style="background: #F18F01; width: 22px; height: 22px; border-radius: 4px; border: 2px solid white; display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: bold;">🏭</div>',
+    iconSize: [22, 22],
+    iconAnchor: [11, 11]
+  });
+
+  const portIcon = L.divIcon({
+    className: 'custom-div-icon',
+    html: '<div style="background: #C73E1D; width: 26px; height: 26px; border-radius: 4px; border: 2px solid white; display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: bold;">⚓</div>',
+    iconSize: [26, 26],
+    iconAnchor: [13, 13]
+  });
+
+  const railwayIcon = L.divIcon({
+    className: 'custom-div-icon',
+    html: '<div style="background: #A23B72; width: 20px; height: 20px; border-radius: 4px; border: 2px solid white; display: flex; align-items: center; justify-content: center; color: white; font-size: 12px; font-weight: bold;">🚂</div>',
+    iconSize: [20, 20],
+    iconAnchor: [10, 10]
+  });
+
+  function loadCityInfrastructure(cityKey, cityName) {
+    // Clear existing infrastructure
+    Object.values(layerGroups).forEach(group => {
+      group.clearLayers();
+      map.removeLayer(group);
+    });
+    
+    if (!cityKey || !infrastructureData[cityKey]) {
+      document.getElementById('cityInfo').style.display = 'none';
+      return;
+    }
+
+    const data = infrastructureData[cityKey];
+    
+    // Show city info
+    document.getElementById('cityName').textContent = cityName;
+    document.getElementById('cityDetails').innerHTML = `
+      Infrastructure loaded:<br>
+      • ${data.shipyards?.length || 0} shipyards<br>
+      • ${data.railways?.length || 0} railway terminals<br>
+      • ${data.manufacturers?.length || 0} manufacturers<br>
+      • ${data.ports?.length || 0} ports<br><br>
+      <small>Use the toggles to show/hide layers</small>
+    `;
+    document.getElementById('cityInfo').style.display = 'block';
+
+    // Add shipyards
+    if (data.shipyards) {
+      data.shipyards.forEach(shipyard => {
+        const marker = L.marker(shipyard.coords, { icon: shipyardIcon })
+          .bindPopup(`
+            <strong>${shipyard.name}</strong><br>
+            Capacity: ${shipyard.capacity}<br>
+            Employees: ${shipyard.employees.toLocaleString()}
+          `);
+        layerGroups.shipyards.addLayer(marker);
+      });
+    }
+
+    // Add railways - now as individual points instead of lines
+    if (data.railways) {
+      data.railways.forEach(railway => {
+        const marker = L.marker(railway.coords, { icon: railwayIcon })
+          .bindPopup(`
+            <strong>${railway.name}</strong><br>
+            Type: ${railway.type}
+          `);
+        layerGroups.railways.addLayer(marker);
+      });
+    }
+
+    // Add manufacturers
+    if (data.manufacturers) {
+      data.manufacturers.forEach(manufacturer => {
+        const marker = L.marker(manufacturer.coords, { icon: manufacturerIcon })
+          .bindPopup(`
+            <strong>${manufacturer.name}</strong><br>
+            Type: ${manufacturer.type}<br>
+            Products: ${manufacturer.products}
+          `);
+        layerGroups.manufacturers.addLayer(marker);
+      });
+    }
+
+    // Add ports
+    if (data.ports) {
+      data.ports.forEach(port => {
+        const marker = L.marker(port.coords, { icon: portIcon })
+          .bindPopup(`
+            <strong>${port.name}</strong><br>
+            Type: ${port.type}<br>
+            Cargo: ${port.cargo}
+          `);
+        layerGroups.ports.addLayer(port);
+      });
+    }
+
+    // Add layers to map based on current checkbox states
+    Object.keys(layerGroups).forEach(layerType => {
+      const checkbox = document.getElementById(layerType);
+      if (checkbox && checkbox.checked) {
+        map.addLayer(layerGroups[layerType]);
+      }
+    });
+  }
+
+  // Toggle controls
+  document.addEventListener('DOMContentLoaded', function() {
+    Object.keys(layerGroups).forEach(layerType => {
+      const checkbox = document.getElementById(layerType);
+      if (checkbox) {
+        checkbox.addEventListener('change', function() {
+          if (this.checked) {
+            map.addLayer(layerGroups[layerType]);
+          } else {
+            map.removeLayer(layerGroups[layerType]);
+          }
+        });
+      }
+    });
+  });
+
+  // Start with clean map - no infrastructure loaded initially
+</script>
+</body>
+</html>
